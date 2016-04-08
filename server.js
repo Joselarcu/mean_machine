@@ -10,6 +10,8 @@ var morgan = require('morgan'); // used to see requests
 var mongoose = require('mongoose'); // for working w/ our database
 var port = process.env.PORT || 8080; // set the port for our app
 var User = require('./app/models/user');
+var jwt = require('jsonwebtoken');
+var superSecret = 'ilovescotchscotchyscotchscotch';
 
 // connect to our database (hosted on modulus.io)
 mongoose.connect('mongodb://localhost/users');
@@ -41,6 +43,50 @@ app.get('/', function(req, res) {
 // get an instance of the express router
 var apiRouter = express.Router();
 
+// route to authenticate a user (POST http://localhost:8080/api/authenticate)
+apiRouter.post('/authenticate', function(req, res) {
+	// find the user
+	// select the name username and password explicitly
+	User.findOne({
+		username: req.body.username
+	}).select('name username password').exec(function(err, user) {
+				if (err) throw err;
+
+		// no user with that username was found
+		if (!user) {
+			res.json({
+				success: false,
+		 		message: 'Authentication failed. User not found.'
+		 	});
+		} else if (user) {
+						// check if password matches
+			var validPassword = user.comparePassword(req.body.password);
+			if (!validPassword) {
+				res.json({
+					success: false,
+					message: 'Authentication failed. Wrong password.'
+				});
+			} else {
+				// if user is found and password is right
+	 			// create a token
+				var token = jwt.sign({
+	 				name: user.name,
+					username: user.username
+	 				}, superSecret, {
+	 					expiresInMinutes: 1440 // expires in 24 hours
+	 			});
+
+	 			// return the information including token as JSON
+	 			res.json({
+	 				success: true,
+	 				message: 'Enjoy your token!',
+	 				token: token
+	 			});
+	 		}
+		}
+	});
+});
+
 // test route to make sure everything is working
 // accessed at GET http://localhost:8080/api
 apiRouter.get('/', function(req, res) {
@@ -52,12 +98,12 @@ var apiRouter = express.Router(); // get an instance of the express Router
 
 // middleware to use for all requests
 apiRouter.use(function(req, res, next) {
-// do logging
-console.log('Somebody just came to our app!');
-// we'll add more to the middleware in Chapter 10
-// this is where we will authenticate users
+	// do logging
+	console.log('Somebody just came to our app!');
+	// we'll add more to the middleware in Chapter 10
+	// this is where we will authenticate users
 
-next(); // make sure we go to the next routes and don't stop here
+	next(); // make sure we go to the next routes and don't stop here
 });
 
  // test route to make sure everything is working
